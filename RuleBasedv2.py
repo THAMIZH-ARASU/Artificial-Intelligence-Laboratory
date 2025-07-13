@@ -467,56 +467,788 @@ class SmartHomeController:
             "last_commands": [cmd.__dict__ for cmd in self.command_history[-5:]]
         }
 
-# ============= DEMO USAGE =============
+# ============= GUI MODULE =============
+
+class SmartHomeGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Smart Home Automation System")
+        self.root.geometry("1200x800")
+        self.root.configure(bg='#2c3e50')
+        
+        # Initialize the smart home controller
+        self.controller = SmartHomeController()
+        self.setup_demo_system()
+        
+        # GUI state
+        self.is_running = False
+        self.auto_cycle_thread = None
+        
+        # Create GUI elements
+        self.setup_styles()
+        self.create_widgets()
+        
+        # Start periodic updates
+        self.update_display()
+    
+    def setup_styles(self):
+        """Setup modern styling"""
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Configure colors
+        style.configure('Title.TLabel', font=('Segoe UI', 16, 'bold'), background='#2c3e50', foreground='white')
+        style.configure('Header.TLabel', font=('Segoe UI', 12, 'bold'), background='#34495e', foreground='white')
+        style.configure('Modern.TButton', font=('Segoe UI', 10), padding=8)
+        style.configure('Status.TLabel', font=('Segoe UI', 9), background='#2c3e50', foreground='#ecf0f1')
+        style.configure('Card.TFrame', background='#34495e', relief='raised', borderwidth=2)
+    
+    def create_widgets(self):
+        """Create all GUI widgets"""
+        # Main container
+        main_frame = ttk.Frame(self.root, style='Card.TFrame')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="🏠 Smart Home Automation System", style='Title.TLabel')
+        title_label.pack(pady=(20, 10))
+        
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Create tabs
+        self.create_dashboard_tab()
+        self.create_sensors_tab()
+        self.create_devices_tab()
+        self.create_rules_tab()
+        self.create_automation_tab()
+        self.create_logs_tab()
+    
+    def create_dashboard_tab(self):
+        """Create the main dashboard tab"""
+        dashboard_frame = ttk.Frame(self.notebook)
+        self.notebook.add(dashboard_frame, text="📊 Dashboard")
+        
+        # Status overview
+        status_frame = ttk.LabelFrame(dashboard_frame, text="System Status", padding=10)
+        status_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Status labels
+        self.status_labels = {}
+        status_items = [
+            ("Active Sensors", "0"),
+            ("Active Devices", "0"),
+            ("Active Rules", "0"),
+            ("Last Cycle", "Never")
+        ]
+        
+        for i, (label, value) in enumerate(status_items):
+            row = i // 2
+            col = i % 2
+            
+            frame = ttk.Frame(status_frame)
+            frame.grid(row=row, column=col, padx=10, pady=5, sticky='ew')
+            
+            ttk.Label(frame, text=f"{label}:", style='Header.TLabel').pack(anchor='w')
+            value_label = ttk.Label(frame, text=value, style='Status.TLabel')
+            value_label.pack(anchor='w')
+            self.status_labels[label] = value_label
+        
+        # Control buttons
+        control_frame = ttk.Frame(dashboard_frame)
+        control_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.start_button = ttk.Button(control_frame, text="▶ Start Automation", 
+                                      command=self.start_automation, style='Modern.TButton')
+        self.start_button.pack(side=tk.LEFT, padx=5)
+        
+        self.stop_button = ttk.Button(control_frame, text="⏹ Stop Automation", 
+                                     command=self.stop_automation, style='Modern.TButton')
+        self.stop_button.pack(side=tk.LEFT, padx=5)
+        
+        self.run_cycle_button = ttk.Button(control_frame, text="🔄 Run Single Cycle", 
+                                          command=self.run_single_cycle, style='Modern.TButton')
+        self.run_cycle_button.pack(side=tk.LEFT, padx=5)
+        
+        # Real-time display
+        display_frame = ttk.LabelFrame(dashboard_frame, text="Real-time Data", padding=10)
+        display_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Create display areas
+        self.create_sensor_display(display_frame)
+        self.create_device_display(display_frame)
+    
+    def create_sensor_display(self, parent):
+        """Create sensor data display"""
+        sensor_frame = ttk.LabelFrame(parent, text="📡 Sensor Readings", padding=10)
+        sensor_frame.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=(0, 5))
+        
+        # Sensor readings text area
+        self.sensor_text = scrolledtext.ScrolledText(sensor_frame, height=15, width=40, 
+                                                   font=('Consolas', 9), bg='#2c3e50', fg='#ecf0f1')
+        self.sensor_text.pack(fill=tk.BOTH, expand=True)
+    
+    def create_device_display(self, parent):
+        """Create device status display"""
+        device_frame = ttk.LabelFrame(parent, text="💡 Device Status", padding=10)
+        device_frame.pack(fill=tk.BOTH, expand=True, side=tk.RIGHT, padx=(5, 0))
+        
+        # Device status text area
+        self.device_text = scrolledtext.ScrolledText(device_frame, height=15, width=40, 
+                                                   font=('Consolas', 9), bg='#2c3e50', fg='#ecf0f1')
+        self.device_text.pack(fill=tk.BOTH, expand=True)
+    
+    def create_sensors_tab(self):
+        """Create sensors management tab"""
+        sensors_frame = ttk.Frame(self.notebook)
+        self.notebook.add(sensors_frame, text="📡 Sensors")
+        
+        # Add sensor section
+        add_frame = ttk.LabelFrame(sensors_frame, text="Add New Sensor", padding=10)
+        add_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Sensor type selection
+        ttk.Label(add_frame, text="Sensor Type:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.sensor_type_var = tk.StringVar(value="temperature")
+        sensor_types = [("Temperature", "temperature"), ("Motion", "motion"), 
+                       ("Light", "light"), ("Occupancy", "occupancy")]
+        
+        for i, (text, value) in enumerate(sensor_types):
+            ttk.Radiobutton(add_frame, text=text, variable=self.sensor_type_var, 
+                           value=value).grid(row=0, column=i+1, padx=5, pady=5)
+        
+        # Sensor details
+        ttk.Label(add_frame, text="Sensor ID:").grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        self.sensor_id_entry = ttk.Entry(add_frame, width=20)
+        self.sensor_id_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        
+        ttk.Label(add_frame, text="Location:").grid(row=1, column=2, padx=5, pady=5, sticky='w')
+        self.sensor_location_entry = ttk.Entry(add_frame, width=20)
+        self.sensor_location_entry.grid(row=1, column=3, padx=5, pady=5, sticky='w')
+        
+        # Add button
+        ttk.Button(add_frame, text="Add Sensor", command=self.add_sensor, 
+                  style='Modern.TButton').grid(row=1, column=4, padx=10, pady=5)
+        
+        # Sensor list
+        list_frame = ttk.LabelFrame(sensors_frame, text="Current Sensors", padding=10)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Treeview for sensors
+        columns = ('ID', 'Type', 'Location', 'Status', 'Last Reading')
+        self.sensor_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=10)
+        
+        for col in columns:
+            self.sensor_tree.heading(col, text=col)
+            self.sensor_tree.column(col, width=120)
+        
+        self.sensor_tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Buttons for sensor management
+        button_frame = ttk.Frame(list_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(button_frame, text="Remove Selected", command=self.remove_sensor, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Update Readings", command=self.update_sensor_readings, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+    
+    def create_devices_tab(self):
+        """Create devices management tab"""
+        devices_frame = ttk.Frame(self.notebook)
+        self.notebook.add(devices_frame, text="💡 Devices")
+        
+        # Add device section
+        add_frame = ttk.LabelFrame(devices_frame, text="Add New Device", padding=10)
+        add_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Device type selection
+        ttk.Label(add_frame, text="Device Type:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.device_type_var = tk.StringVar(value="light")
+        device_types = [("Smart Light", "light"), ("Thermostat", "thermostat"), 
+                       ("Security Camera", "security_camera")]
+        
+        for i, (text, value) in enumerate(device_types):
+            ttk.Radiobutton(add_frame, text=text, variable=self.device_type_var, 
+                           value=value).grid(row=0, column=i+1, padx=5, pady=5)
+        
+        # Device details
+        ttk.Label(add_frame, text="Device ID:").grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        self.device_id_entry = ttk.Entry(add_frame, width=20)
+        self.device_id_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        
+        ttk.Label(add_frame, text="Location:").grid(row=1, column=2, padx=5, pady=5, sticky='w')
+        self.device_location_entry = ttk.Entry(add_frame, width=20)
+        self.device_location_entry.grid(row=1, column=3, padx=5, pady=5, sticky='w')
+        
+        # Add button
+        ttk.Button(add_frame, text="Add Device", command=self.add_device, 
+                  style='Modern.TButton').grid(row=1, column=4, padx=10, pady=5)
+        
+        # Device list
+        list_frame = ttk.LabelFrame(devices_frame, text="Current Devices", padding=10)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Treeview for devices
+        columns = ('ID', 'Type', 'Location', 'Status', 'Details')
+        self.device_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=10)
+        
+        for col in columns:
+            self.device_tree.heading(col, text=col)
+            self.device_tree.column(col, width=120)
+        
+        self.device_tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Buttons for device management
+        button_frame = ttk.Frame(list_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(button_frame, text="Remove Selected", command=self.remove_device, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Control Device", command=self.control_device, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+    
+    def create_rules_tab(self):
+        """Create rules management tab"""
+        rules_frame = ttk.Frame(self.notebook)
+        self.notebook.add(rules_frame, text="⚙️ Rules")
+        
+        # Add rule section
+        add_frame = ttk.LabelFrame(rules_frame, text="Add New Rule", padding=10)
+        add_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Rule type selection
+        ttk.Label(add_frame, text="Rule Type:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.rule_type_var = tk.StringVar(value="temperature")
+        rule_types = [("Temperature Control", "temperature"), ("Motion Lights", "motion"), 
+                     ("Security Monitoring", "security"), ("Ambient Lighting", "ambient")]
+        
+        for i, (text, value) in enumerate(rule_types):
+            ttk.Radiobutton(add_frame, text=text, variable=self.rule_type_var, 
+                           value=value).grid(row=0, column=i+1, padx=5, pady=5)
+        
+        # Rule parameters
+        ttk.Label(add_frame, text="Rule ID:").grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        self.rule_id_entry = ttk.Entry(add_frame, width=20)
+        self.rule_id_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        
+        ttk.Label(add_frame, text="Priority:").grid(row=1, column=2, padx=5, pady=5, sticky='w')
+        self.rule_priority_var = tk.StringVar(value="2")
+        priority_combo = ttk.Combobox(add_frame, textvariable=self.rule_priority_var, 
+                                     values=["1", "2", "3"], width=10)
+        priority_combo.grid(row=1, column=3, padx=5, pady=5, sticky='w')
+        
+        # Add button
+        ttk.Button(add_frame, text="Add Rule", command=self.add_rule, 
+                  style='Modern.TButton').grid(row=1, column=4, padx=10, pady=5)
+        
+        # Rule list
+        list_frame = ttk.LabelFrame(rules_frame, text="Current Rules", padding=10)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Treeview for rules
+        columns = ('ID', 'Type', 'Priority', 'Status', 'Last Triggered')
+        self.rule_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=10)
+        
+        for col in columns:
+            self.rule_tree.heading(col, text=col)
+            self.rule_tree.column(col, width=120)
+        
+        self.rule_tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Buttons for rule management
+        button_frame = ttk.Frame(list_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(button_frame, text="Remove Selected", command=self.remove_rule, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Enable/Disable", command=self.toggle_rule, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+    
+    def create_automation_tab(self):
+        """Create automation control tab"""
+        automation_frame = ttk.Frame(self.notebook)
+        self.notebook.add(automation_frame, text="🤖 Automation")
+        
+        # Automation controls
+        control_frame = ttk.LabelFrame(automation_frame, text="Automation Controls", padding=10)
+        control_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Cycle interval
+        ttk.Label(control_frame, text="Cycle Interval (seconds):").grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.cycle_interval_var = tk.StringVar(value="5")
+        self.cycle_interval_entry = ttk.Entry(control_frame, textvariable=self.cycle_interval_var, width=10)
+        self.cycle_interval_entry.grid(row=0, column=1, padx=5, pady=5, sticky='w')
+        
+        # Control buttons
+        button_frame = ttk.Frame(control_frame)
+        button_frame.grid(row=0, column=2, padx=20, pady=5)
+        
+        self.auto_start_button = ttk.Button(button_frame, text="▶ Start Auto", 
+                                           command=self.start_auto_cycle, style='Modern.TButton')
+        self.auto_start_button.pack(side=tk.LEFT, padx=5)
+        
+        self.auto_stop_button = ttk.Button(button_frame, text="⏹ Stop Auto", 
+                                          command=self.stop_auto_cycle, style='Modern.TButton')
+        self.auto_stop_button.pack(side=tk.LEFT, padx=5)
+        
+        # Manual controls
+        manual_frame = ttk.LabelFrame(automation_frame, text="Manual Controls", padding=10)
+        manual_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Button(manual_frame, text="🔄 Run Single Cycle", command=self.run_single_cycle, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5, pady=5)
+        
+        ttk.Button(manual_frame, text="📊 Show Status", command=self.show_system_status, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5, pady=5)
+        
+        ttk.Button(manual_frame, text="🔄 Reset System", command=self.reset_system, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5, pady=5)
+    
+    def create_logs_tab(self):
+        """Create logs and history tab"""
+        logs_frame = ttk.Frame(self.notebook)
+        self.notebook.add(logs_frame, text="📋 Logs")
+        
+        # Log display
+        log_frame = ttk.LabelFrame(logs_frame, text="System Logs", padding=10)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Log text area
+        self.log_text = scrolledtext.ScrolledText(log_frame, height=20, width=80, 
+                                                font=('Consolas', 9), bg='#2c3e50', fg='#ecf0f1')
+        self.log_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Log controls
+        control_frame = ttk.Frame(log_frame)
+        control_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(control_frame, text="Clear Logs", command=self.clear_logs, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+        ttk.Button(control_frame, text="Export Logs", command=self.export_logs, 
+                  style='Modern.TButton').pack(side=tk.LEFT, padx=5)
+    
+    def setup_demo_system(self):
+        """Setup a demo system with sensors, devices, and rules"""
+        # Add demo sensors
+        self.controller.add_sensor(TemperatureSensor("temp_living", "living_room", 22.0))
+        self.controller.add_sensor(MotionSensor("motion_living", "living_room", False))
+        self.controller.add_sensor(LightSensor("light_living", "living_room", 300))
+        self.controller.add_sensor(OccupancySensor("occupancy_living", "living_room", True))
+        
+        # Add demo devices
+        self.controller.add_device(SmartLight("light_living_main", "living_room"))
+        self.controller.add_device(Thermostat("thermostat_main", "living_room"))
+        self.controller.add_device(SecurityCamera("camera_living", "living_room"))
+        
+        # Add demo rules
+        self.controller.add_rule(TemperatureRule("temp_control", target_temp=22.0))
+        self.controller.add_rule(MotionLightRule("motion_lights"))
+        self.controller.add_rule(SecurityRule("security_monitoring"))
+        self.controller.add_rule(AmbientLightRule("ambient_lighting"))
+    
+    def update_display(self):
+        """Update all displays with current data"""
+        self.update_sensor_display()
+        self.update_device_display()
+        self.update_status_labels()
+        self.update_trees()
+        
+        # Schedule next update
+        self.root.after(1000, self.update_display)
+    
+    def update_sensor_display(self):
+        """Update sensor readings display"""
+        self.sensor_text.delete('1.0', tk.END)
+        
+        for sensor_id, sensor in self.controller.sensors.items():
+            if sensor.last_reading:
+                reading = sensor.last_reading
+                self.sensor_text.insert(tk.END, f"📡 {sensor_id}\n")
+                self.sensor_text.insert(tk.END, f"   Type: {reading.sensor_type.value}\n")
+                self.sensor_text.insert(tk.END, f"   Value: {reading.value}\n")
+                self.sensor_text.insert(tk.END, f"   Location: {reading.location}\n")
+                self.sensor_text.insert(tk.END, f"   Time: {reading.timestamp.strftime('%H:%M:%S')}\n")
+                self.sensor_text.insert(tk.END, "-" * 40 + "\n")
+    
+    def update_device_display(self):
+        """Update device status display"""
+        self.device_text.delete('1.0', tk.END)
+        
+        for device_id, device in self.controller.devices.items():
+            status = device.get_status()
+            self.device_text.insert(tk.END, f"💡 {device_id}\n")
+            self.device_text.insert(tk.END, f"   Type: {status['type']}\n")
+            self.device_text.insert(tk.END, f"   Location: {status['location']}\n")
+            self.device_text.insert(tk.END, f"   Status: {'🟢 ON' if status['is_on'] else '🔴 OFF'}\n")
+            if status['status']:
+                for key, value in status['status'].items():
+                    self.device_text.insert(tk.END, f"   {key}: {value}\n")
+            self.device_text.insert(tk.END, "-" * 40 + "\n")
+    
+    def update_status_labels(self):
+        """Update status labels"""
+        active_sensors = len([s for s in self.controller.sensors.values() if s.last_reading])
+        active_devices = len([d for d in self.controller.devices.values() if d.is_on])
+        active_rules = len([r for r in self.controller.rule_engine.rules if r.enabled])
+        
+        self.status_labels["Active Sensors"].config(text=str(active_sensors))
+        self.status_labels["Active Devices"].config(text=str(active_devices))
+        self.status_labels["Active Rules"].config(text=str(active_rules))
+        
+        if hasattr(self, 'last_cycle_time'):
+            self.status_labels["Last Cycle"].config(text=self.last_cycle_time)
+        else:
+            self.status_labels["Last Cycle"].config(text="Never")
+    
+    def update_trees(self):
+        """Update treeviews"""
+        # Update sensor tree
+        for item in self.sensor_tree.get_children():
+            self.sensor_tree.delete(item)
+        
+        for sensor_id, sensor in self.controller.sensors.items():
+            status = "Active" if sensor.last_reading else "Inactive"
+            last_reading = sensor.last_reading.value if sensor.last_reading else "N/A"
+            self.sensor_tree.insert('', 'end', values=(
+                sensor_id, sensor.__class__.__name__, sensor.location, status, last_reading
+            ))
+        
+        # Update device tree
+        for item in self.device_tree.get_children():
+            self.device_tree.delete(item)
+        
+        for device_id, device in self.controller.devices.items():
+            status = "ON" if device.is_on else "OFF"
+            details = str(device.get_status()['status'])
+            self.device_tree.insert('', 'end', values=(
+                device_id, device.device_type.value, device.location, status, details
+            ))
+        
+        # Update rule tree
+        for item in self.rule_tree.get_children():
+            self.rule_tree.delete(item)
+        
+        for rule in self.controller.rule_engine.rules:
+            status = "Enabled" if rule.enabled else "Disabled"
+            self.rule_tree.insert('', 'end', values=(
+                rule.rule_id, rule.__class__.__name__, rule.priority, status, "N/A"
+            ))
+    
+    def log_message(self, message):
+        """Add message to log"""
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
+        self.log_text.see(tk.END)
+    
+    def start_automation(self):
+        """Start automation system"""
+        self.is_running = True
+        self.log_message("🚀 Automation system started")
+        self.start_button.config(state='disabled')
+        self.stop_button.config(state='normal')
+    
+    def stop_automation(self):
+        """Stop automation system"""
+        self.is_running = False
+        self.log_message("⏹ Automation system stopped")
+        self.start_button.config(state='normal')
+        self.stop_button.config(state='disabled')
+    
+    def run_single_cycle(self):
+        """Run a single automation cycle"""
+        self.controller.run_automation_cycle()
+        self.last_cycle_time = datetime.now().strftime('%H:%M:%S')
+        self.log_message("🔄 Single automation cycle completed")
+    
+    def start_auto_cycle(self):
+        """Start automatic cycling"""
+        self.is_running = True
+        self.auto_start_button.config(state='disabled')
+        self.auto_stop_button.config(state='normal')
+        self.log_message("🔄 Auto-cycling started")
+        
+        def auto_cycle():
+            while self.is_running:
+                self.controller.run_automation_cycle()
+                self.last_cycle_time = datetime.now().strftime('%H:%M:%S')
+                self.log_message("🔄 Auto-cycle completed")
+                time_module.sleep(int(self.cycle_interval_var.get()))
+        
+        self.auto_cycle_thread = threading.Thread(target=auto_cycle, daemon=True)
+        self.auto_cycle_thread.start()
+    
+    def stop_auto_cycle(self):
+        """Stop automatic cycling"""
+        self.is_running = False
+        self.auto_start_button.config(state='normal')
+        self.auto_stop_button.config(state='disabled')
+        self.log_message("⏹ Auto-cycling stopped")
+    
+    def add_sensor(self):
+        """Add a new sensor"""
+        sensor_id = self.sensor_id_entry.get()
+        location = self.sensor_location_entry.get()
+        sensor_type = self.sensor_type_var.get()
+        
+        if not sensor_id or not location:
+            messagebox.showerror("Error", "Please enter sensor ID and location")
+            return
+        
+        # Create sensor based on type
+        if sensor_type == "temperature":
+            sensor = TemperatureSensor(sensor_id, location)
+        elif sensor_type == "motion":
+            sensor = MotionSensor(sensor_id, location)
+        elif sensor_type == "light":
+            sensor = LightSensor(sensor_id, location)
+        elif sensor_type == "occupancy":
+            sensor = OccupancySensor(sensor_id, location)
+        
+        self.controller.add_sensor(sensor)
+        self.log_message(f"📡 Added sensor: {sensor_id} ({sensor_type}) at {location}")
+        
+        # Clear entries
+        self.sensor_id_entry.delete(0, tk.END)
+        self.sensor_location_entry.delete(0, tk.END)
+    
+    def add_device(self):
+        """Add a new device"""
+        device_id = self.device_id_entry.get()
+        location = self.device_location_entry.get()
+        device_type = self.device_type_var.get()
+        
+        if not device_id or not location:
+            messagebox.showerror("Error", "Please enter device ID and location")
+            return
+        
+        # Create device based on type
+        if device_type == "light":
+            device = SmartLight(device_id, location)
+        elif device_type == "thermostat":
+            device = Thermostat(device_id, location)
+        elif device_type == "security_camera":
+            device = SecurityCamera(device_id, location)
+        
+        self.controller.add_device(device)
+        self.log_message(f"💡 Added device: {device_id} ({device_type}) at {location}")
+        
+        # Clear entries
+        self.device_id_entry.delete(0, tk.END)
+        self.device_location_entry.delete(0, tk.END)
+    
+    def add_rule(self):
+        """Add a new rule"""
+        rule_id = self.rule_id_entry.get()
+        rule_type = self.rule_type_var.get()
+        priority = int(self.rule_priority_var.get())
+        
+        if not rule_id:
+            messagebox.showerror("Error", "Please enter rule ID")
+            return
+        
+        # Create rule based on type
+        if rule_type == "temperature":
+            rule = TemperatureRule(rule_id, target_temp=22.0)
+        elif rule_type == "motion":
+            rule = MotionLightRule(rule_id)
+        elif rule_type == "security":
+            rule = SecurityRule(rule_id)
+        elif rule_type == "ambient":
+            rule = AmbientLightRule(rule_id)
+        
+        rule.priority = priority
+        self.controller.add_rule(rule)
+        self.log_message(f"⚙️ Added rule: {rule_id} ({rule_type}) with priority {priority}")
+        
+        # Clear entries
+        self.rule_id_entry.delete(0, tk.END)
+    
+    def remove_sensor(self):
+        """Remove selected sensor"""
+        selection = self.sensor_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a sensor to remove")
+            return
+        
+        item = self.sensor_tree.item(selection[0])
+        sensor_id = item['values'][0]
+        
+        if sensor_id in self.controller.sensors:
+            del self.controller.sensors[sensor_id]
+            self.log_message(f"📡 Removed sensor: {sensor_id}")
+    
+    def remove_device(self):
+        """Remove selected device"""
+        selection = self.device_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a device to remove")
+            return
+        
+        item = self.device_tree.item(selection[0])
+        device_id = item['values'][0]
+        
+        if device_id in self.controller.devices:
+            del self.controller.devices[device_id]
+            self.log_message(f"💡 Removed device: {device_id}")
+    
+    def remove_rule(self):
+        """Remove selected rule"""
+        selection = self.rule_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a rule to remove")
+            return
+        
+        item = self.rule_tree.item(selection[0])
+        rule_id = item['values'][0]
+        
+        self.controller.rule_engine.remove_rule(rule_id)
+        self.log_message(f"⚙️ Removed rule: {rule_id}")
+    
+    def update_sensor_readings(self):
+        """Update sensor readings"""
+        self.controller.read_all_sensors()
+        self.log_message("📡 Updated all sensor readings")
+    
+    def control_device(self):
+        """Control selected device"""
+        selection = self.device_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a device to control")
+            return
+        
+        item = self.device_tree.item(selection[0])
+        device_id = item['values'][0]
+        
+        if device_id in self.controller.devices:
+            device = self.controller.devices[device_id]
+            
+            # Create control dialog
+            control_window = tk.Toplevel(self.root)
+            control_window.title(f"Control {device_id}")
+            control_window.geometry("300x200")
+            
+            ttk.Label(control_window, text=f"Control {device_id}").pack(pady=10)
+            
+            if device.device_type == DeviceType.LIGHT:
+                ttk.Button(control_window, text="Turn On", 
+                          command=lambda: self.execute_device_command(device_id, "turn_on", {})).pack(pady=5)
+                ttk.Button(control_window, text="Turn Off", 
+                          command=lambda: self.execute_device_command(device_id, "turn_off", {})).pack(pady=5)
+            elif device.device_type == DeviceType.THERMOSTAT:
+                ttk.Button(control_window, text="Set to 20°C", 
+                          command=lambda: self.execute_device_command(device_id, "set_temperature", {"temperature": 20.0})).pack(pady=5)
+                ttk.Button(control_window, text="Set to 25°C", 
+                          command=lambda: self.execute_device_command(device_id, "set_temperature", {"temperature": 25.0})).pack(pady=5)
+    
+    def execute_device_command(self, device_id, action, parameters):
+        """Execute a device command"""
+        command = DeviceCommand(device_id, action, parameters, datetime.now())
+        if device_id in self.controller.devices:
+            device = self.controller.devices[device_id]
+            success = device.execute_command(command)
+            if success:
+                self.log_message(f"✅ Executed {action} on {device_id}")
+            else:
+                self.log_message(f"❌ Failed to execute {action} on {device_id}")
+    
+    def toggle_rule(self):
+        """Toggle rule enabled/disabled"""
+        selection = self.rule_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a rule to toggle")
+            return
+        
+        item = self.rule_tree.item(selection[0])
+        rule_id = item['values'][0]
+        
+        for rule in self.controller.rule_engine.rules:
+            if rule.rule_id == rule_id:
+                rule.enabled = not rule.enabled
+                status = "enabled" if rule.enabled else "disabled"
+                self.log_message(f"⚙️ {rule_id} {status}")
+                break
+    
+    def show_system_status(self):
+        """Show detailed system status"""
+        status = self.controller.get_system_status()
+        
+        status_window = tk.Toplevel(self.root)
+        status_window.title("System Status")
+        status_window.geometry("600x400")
+        
+        text = scrolledtext.ScrolledText(status_window, font=('Consolas', 10))
+        text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        text.insert(tk.END, "=== SMART HOME SYSTEM STATUS ===\n\n")
+        text.insert(tk.END, f"Sensors: {len(self.controller.sensors)}\n")
+        text.insert(tk.END, f"Devices: {len(self.controller.devices)}\n")
+        text.insert(tk.END, f"Rules: {len(self.controller.rule_engine.rules)}\n")
+        text.insert(tk.END, f"Last Commands: {len(status['last_commands'])}\n\n")
+        
+        text.insert(tk.END, "=== DETAILED STATUS ===\n")
+        text.insert(tk.END, json.dumps(status, indent=2, default=str))
+    
+    def reset_system(self):
+        """Reset the entire system"""
+        if messagebox.askyesno("Reset System", "Are you sure you want to reset the entire system?"):
+            self.controller = SmartHomeController()
+            self.setup_demo_system()
+            self.log_message("🔄 System reset completed")
+    
+    def clear_logs(self):
+        """Clear log display"""
+        self.log_text.delete('1.0', tk.END)
+        self.log_message("📋 Logs cleared")
+    
+    def export_logs(self):
+        """Export logs to file"""
+        logs = self.log_text.get('1.0', tk.END)
+        try:
+            with open('smart_home_logs.txt', 'w') as f:
+                f.write(logs)
+            self.log_message("📄 Logs exported to smart_home_logs.txt")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export logs: {e}")
 
 def main():
-    # Initialize the smart home system
-    home = SmartHomeController()
+    """Main function to run the GUI"""
+    root = tk.Tk()
+    app = SmartHomeGUI(root)
     
-    # Add sensors
-    home.add_sensor(TemperatureSensor("temp_living", "living_room", 18.0))
-    home.add_sensor(MotionSensor("motion_living", "living_room", True))
-    home.add_sensor(LightSensor("light_living", "living_room", 150))
-    home.add_sensor(OccupancySensor("occupancy_living", "living_room", False))
+    # Center the window
+    root.update_idletasks()
+    width = root.winfo_width()
+    height = root.winfo_height()
+    x = (root.winfo_screenwidth() // 2) - (width // 2)
+    y = (root.winfo_screenheight() // 2) - (height // 2)
+    root.geometry(f'{width}x{height}+{x}+{y}')
     
-    home.add_sensor(TemperatureSensor("temp_bedroom", "bedroom", 25.0))
-    home.add_sensor(MotionSensor("motion_bedroom", "bedroom", False))
+    # Set minimum window size
+    root.minsize(1000, 700)
     
-    # Add devices
-    home.add_device(SmartLight("light_living_main", "living_room"))
-    home.add_device(SmartLight("light_bedroom_main", "bedroom"))
-    home.add_device(Thermostat("thermostat_main", "living_room"))
-    home.add_device(SecurityCamera("camera_living", "living_room"))
+    # Handle window closing
+    def on_closing():
+        if app.is_running:
+            app.stop_automation()
+        root.quit()
+        root.destroy()
     
-    # Add rules
-    home.add_rule(TemperatureRule("temp_control", target_temp=22.0))
-    home.add_rule(MotionLightRule("motion_lights"))
-    home.add_rule(SecurityRule("security_monitoring"))
-    home.add_rule(AmbientLightRule("ambient_lighting", low_light_threshold=200))
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     
-    # Run automation cycles
-    for cycle in range(3):
-        print(f"\n{'='*50}")
-        print(f"AUTOMATION CYCLE {cycle + 1}")
-        print(f"{'='*50}")
-        
-        home.run_automation_cycle()
-        
-        # Show system status
-        status = home.get_system_status()
-        print("\n--- System Status ---")
-        print(f"Active Devices: {len([d for d in status['devices'].values() if d['is_on']])}")
-        print(f"Total Rules: {status['rules']}")
-        
-        # Simulate some changes for next cycle
-        if cycle == 0:
-            # Simulate motion detection
-            home.sensors["motion_bedroom"].motion_detected = True
-            home.sensors["temp_bedroom"].current_temp = 19.0
-        elif cycle == 1:
-            # Simulate occupancy change
-            home.sensors["occupancy_living"].occupied = True
-            home.sensors["light_living"].lux_level = 50
+    # Start the GUI
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        print("\nApplication interrupted by user")
+    except Exception as e:
+        print(f"Application error: {e}")
+    finally:
+        try:
+            root.destroy()
+        except:
+            pass
 
 if __name__ == "__main__":
     main()
