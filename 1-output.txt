@@ -1,0 +1,84 @@
+3-PUZZLE BFS SEARCH TREE
+==================================================
+
+TREE STRUCTURE:
+--------------------
+\-- State (Depth 0) [SOLUTION]
+    Board:
+    1 2 3
+    4   6
+    7 5 8
+
+    +-- State (Depth 1)
+    |   Move: UP
+    |   Board:
+    |   1   3
+    |   4 2 6
+    |   7 5 8
+
+    |   +-- State (Depth 2)
+    |   |   Move: LEFT
+    |   |   Board:
+    |   |     1 3
+    |   |   4 2 6
+    |   |   7 5 8
+
+    |   \-- State (Depth 2)
+    |       Move: RIGHT
+    |       Board:
+    |       1 3  
+    |       4 2 6
+    |       7 5 8
+
+    +-- State (Depth 1) [SOLUTION]
+    |   Move: DOWN
+    |   Board:
+    |   1 2 3
+    |   4 5 6
+    |   7   8
+
+    |   +-- State (Depth 2)
+    |   |   Move: LEFT
+    |   |   Board:
+    |   |   1 2 3
+    |   |   4 5 6
+    |   |     7 8
+
+    |   \-- State (Depth 2) [SOLUTION]
+    |       Move: RIGHT
+    |       Board:
+    |       1 2 3
+    |       4 5 6
+    |       7 8
+
+    +-- State (Depth 1)
+    |   Move: LEFT
+    |   Board:
+    |   1 2 3
+    |     4 6
+    |   7 5 8
+
+    \-- State (Depth 1)
+        Move: RIGHT
+        Board:
+        1 2 3
+        4 6  
+        7 5 8
+
+
+SOLUTION PATH:
+--------------------
+Initial State:
+1 2 3
+4   6
+7 5 8
+
+Move 1: DOWN
+1 2 3
+4 5 6
+7   8
+
+Move 2: RIGHT
+1 2 3
+4 5 6
+7 8
