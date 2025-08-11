@@ -1,0 +1,79 @@
+WATER JUG PROBLEM DFS SEARCH TREE
+==================================================
+
+TREE STRUCTURE:
+--------------------
+\-- State (Depth 0) [SOLUTION]
+    State: Jug1: 0, Jug2: 0
+
+    +-- State (Depth 1)
+    |   Action: Fill Jug 1 (capacity 5)
+    |   State: Jug1: 5, Jug2: 0
+
+    \-- State (Depth 1) [SOLUTION]
+        Action: Fill Jug 2 (capacity 6)
+        State: Jug1: 0, Jug2: 6
+
+        +-- State (Depth 2)
+        |   Action: Fill Jug 1 (capacity 5)
+        |   State: Jug1: 5, Jug2: 6
+
+        \-- State (Depth 2) [SOLUTION]
+            Action: Pour from Jug 2 to Jug 1 (5 units)
+            State: Jug1: 5, Jug2: 1
+
+            \-- State (Depth 3) [SOLUTION]
+                Action: Empty Jug 1
+                State: Jug1: 0, Jug2: 1
+
+                \-- State (Depth 4) [SOLUTION]
+                    Action: Pour from Jug 2 to Jug 1 (1 units)
+                    State: Jug1: 1, Jug2: 0
+
+                    \-- State (Depth 5) [SOLUTION]
+                        Action: Fill Jug 2 (capacity 6)
+                        State: Jug1: 1, Jug2: 6
+
+                        \-- State (Depth 6) [SOLUTION]
+                            Action: Pour from Jug 2 to Jug 1 (4 units)
+                            State: Jug1: 5, Jug2: 2
+
+                            \-- State (Depth 7) [SOLUTION]
+                                Action: Empty Jug 1
+                                State: Jug1: 0, Jug2: 2
+
+                                \-- State (Depth 8) [SOLUTION]
+                                    Action: Pour from Jug 2 to Jug 1 (2 units)
+                                    State: Jug1: 2, Jug2: 0
+                                    *** TARGET 2 ACHIEVED in Jug 1 ***
+
+
+SOLUTION PATH:
+--------------------
+Initial State:
+  Jug1: 0, Jug2: 0
+
+Step 1: Fill Jug 2 (capacity 6)
+  Jug1: 0, Jug2: 6
+
+Step 2: Pour from Jug 2 to Jug 1 (5 units)
+  Jug1: 5, Jug2: 1
+
+Step 3: Empty Jug 1
+  Jug1: 0, Jug2: 1
+
+Step 4: Pour from Jug 2 to Jug 1 (1 units)
+  Jug1: 1, Jug2: 0
+
+Step 5: Fill Jug 2 (capacity 6)
+  Jug1: 1, Jug2: 6
+
+Step 6: Pour from Jug 2 to Jug 1 (4 units)
+  Jug1: 5, Jug2: 2
+
+Step 7: Empty Jug 1
+  Jug1: 0, Jug2: 2
+
+Step 8: Pour from Jug 2 to Jug 1 (2 units)
+  Jug1: 2, Jug2: 0
+  *** TARGET 2 ACHIEVED in Jug 1 ***

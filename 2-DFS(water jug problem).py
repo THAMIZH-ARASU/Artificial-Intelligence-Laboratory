@@ -8,9 +8,16 @@ class WaterJugState:
         self.action = action
         self.depth = depth
     
-    def is_goal(self, target):
-        """Check if current state contains the target amount in either jug"""
-        return self.jug1_amount == target or self.jug2_amount == target
+    def is_goal(self, target, target_jug=None):
+        """Check if current state contains the target amount in the specified jug"""
+        if target_jug is None:
+            # Default behavior: target in either jug
+            return self.jug1_amount == target or self.jug2_amount == target
+        elif target_jug == 1:
+            return self.jug1_amount == target
+        elif target_jug == 2:
+            return self.jug2_amount == target
+        return False
     
     def get_state_tuple(self):
         """Return state as tuple for hashing/comparison"""
@@ -87,26 +94,28 @@ class WaterJugState:
     def __str__(self):
         return f"Jug1: {self.jug1_amount}, Jug2: {self.jug2_amount}"
 
-def dfs_solve(jug1_capacity, jug2_capacity, target, max_depth=50):
+def dfs_solve(jug1_capacity, jug2_capacity, target, target_jug=None, max_depth=50):
     """
     Solve Water Jug problem using Depth-First Search
-    Returns: (solution_path, nodes_explored) or (None, nodes_explored)
+    Returns: (solution_path, nodes_explored, all_states_tree) or (None, nodes_explored, all_states_tree)
     """
     # Check if target is achievable
     if not is_solvable(jug1_capacity, jug2_capacity, target):
-        return None, 0
+        return None, 0, {}
     
     # Start with both jugs empty
     initial_state = WaterJugState(0, 0)
     
     # Check if initial state is already the goal
-    if initial_state.is_goal(target):
-        return [initial_state], 1
+    if initial_state.is_goal(target, target_jug):
+        all_states_tree = {initial_state.get_state_tuple(): initial_state}
+        return [initial_state], 1, all_states_tree
     
     # DFS setup
     stack = [initial_state]
     visited = {initial_state.get_state_tuple()}
     nodes_explored = 0
+    all_states_tree = {initial_state.get_state_tuple(): initial_state}
     
     while stack:
         current_state = stack.pop()
@@ -124,8 +133,11 @@ def dfs_solve(jug1_capacity, jug2_capacity, target, max_depth=50):
             if state_tuple in visited:
                 continue
             
+            # Add to tree
+            all_states_tree[state_tuple] = neighbor
+            
             # Check if we found the goal
-            if neighbor.is_goal(target):
+            if neighbor.is_goal(target, target_jug):
                 # Reconstruct path
                 path = []
                 current = neighbor
@@ -133,14 +145,14 @@ def dfs_solve(jug1_capacity, jug2_capacity, target, max_depth=50):
                     path.append(current)
                     current = current.parent
                 path.reverse()
-                return path, nodes_explored + 1
+                return path, nodes_explored + 1, all_states_tree
             
             # Add to stack and mark as visited
             stack.append(neighbor)
             visited.add(state_tuple)
     
     # No solution found within depth limit
-    return None, nodes_explored
+    return None, nodes_explored, all_states_tree
 
 def is_solvable(jug1_capacity, jug2_capacity, target):
     """
@@ -155,7 +167,156 @@ def is_solvable(jug1_capacity, jug2_capacity, target):
     gcd_value = math.gcd(jug1_capacity, jug2_capacity)
     return target % gcd_value == 0
 
-def print_solution(path, jug1_capacity, jug2_capacity, target):
+def format_tree_output(all_states_tree, solution_path, jug1_capacity, jug2_capacity, target, target_jug=None):
+    """Format the tree output for file and console display"""
+    output = []
+    output.append("WATER JUG PROBLEM DFS SEARCH TREE")
+    output.append("=" * 50)
+    output.append("")
+    
+    # Build parent-child relationships
+    children_map = {}
+    for state in all_states_tree.values():
+        if state.parent:
+            parent_key = state.parent.get_state_tuple()
+            if parent_key not in children_map:
+                children_map[parent_key] = []
+            children_map[parent_key].append(state)
+    
+    # Find root state (state with no parent)
+    root_state = None
+    for state in all_states_tree.values():
+        if state.parent is None:
+            root_state = state
+            break
+    
+    def print_tree_node(state, prefix="", is_last=True, visited=None):
+        """Recursively print tree node with proper formatting"""
+        if visited is None:
+            visited = set()
+        
+        state_key = state.get_state_tuple()
+        if state_key in visited:
+            return
+        
+        visited.add(state_key)
+        
+        # Mark if this state is part of the solution path
+        is_solution = state in solution_path if solution_path else False
+        solution_marker = " [SOLUTION]" if is_solution else ""
+        
+        # Print current node
+        connector = "\\-- " if is_last else "+-- "
+        output.append(f"{prefix}{connector}State (Depth {state.depth}){solution_marker}")
+        
+        if state.action:
+            action_prefix = "    " if is_last else "|   "
+            output.append(f"{prefix}{action_prefix}Action: {state.action}")
+        
+        # Print state
+        state_prefix = "    " if is_last else "|   "
+        output.append(f"{prefix}{state_prefix}State: {state}")
+        
+        # Highlight if target is achieved
+        if state.is_goal(target, target_jug):
+            if state.jug1_amount == target:
+                output.append(f"{prefix}{state_prefix}*** TARGET {target} ACHIEVED in Jug 1 ***")
+            if state.jug2_amount == target:
+                output.append(f"{prefix}{state_prefix}*** TARGET {target} ACHIEVED in Jug 2 ***")
+        
+        output.append("")
+        
+        # Print children
+        children = children_map.get(state_key, [])
+        for i, child in enumerate(children):
+            is_last_child = (i == len(children) - 1)
+            new_prefix = prefix + ("    " if is_last else "|   ")
+            print_tree_node(child, new_prefix, is_last_child, visited)
+    
+    # Print the tree starting from root
+    if root_state:
+        output.append("TREE STRUCTURE:")
+        output.append("-" * 20)
+        print_tree_node(root_state)
+    
+    # Add solution summary
+    if solution_path:
+        output.append("\nSOLUTION PATH:")
+        output.append("-" * 20)
+        for i, state in enumerate(solution_path):
+            if i == 0:
+                output.append("Initial State:")
+            else:
+                output.append(f"Step {i}: {state.action}")
+            output.append(f"  {state}")
+            
+            # Highlight if target is achieved
+            if state.is_goal(target, target_jug):
+                if state.jug1_amount == target:
+                    output.append(f"  *** TARGET {target} ACHIEVED in Jug 1 ***")
+                if state.jug2_amount == target:
+                    output.append(f"  *** TARGET {target} ACHIEVED in Jug 2 ***")
+            output.append("")
+    
+    return "\n".join(output)
+
+def get_user_input():
+    """Get jug capacities and target from user"""
+    print("WATER JUG PROBLEM SOLVER USING DFS")
+    print("=" * 40)
+    print()
+    
+    # Get jug capacities
+    while True:
+        try:
+            jug1_capacity = int(input("Enter capacity of Jug 1: "))
+            if jug1_capacity <= 0:
+                print("Jug capacity must be positive")
+                continue
+            break
+        except ValueError:
+            print("Please enter a valid number")
+    
+    while True:
+        try:
+            jug2_capacity = int(input("Enter capacity of Jug 2: "))
+            if jug2_capacity <= 0:
+                print("Jug capacity must be positive")
+                continue
+            break
+        except ValueError:
+            print("Please enter a valid number")
+    
+    # Get target amount
+    while True:
+        try:
+            target = int(input("Enter target amount to measure: "))
+            if target <= 0:
+                print("Target amount must be positive")
+                continue
+            break
+        except ValueError:
+            print("Please enter a valid number")
+    
+    # Get target jug preference
+    while True:
+        try:
+            print("\nWhich jug should contain the target amount in the final state?")
+            print("1. Jug 1")
+            print("2. Jug 2") 
+            print("3. Either jug (any solution)")
+            target_jug_choice = int(input("Enter your choice (1, 2, or 3): "))
+            if target_jug_choice in [1, 2, 3]:
+                target_jug = target_jug_choice if target_jug_choice != 3 else None
+                break
+            else:
+                print("Please enter 1, 2, or 3")
+        except ValueError:
+            print("Please enter a valid number")
+    
+    return jug1_capacity, jug2_capacity, target, target_jug
+
+def print_solution(path, jug1_capacity, jug2_capacity, target, target_jug=None):
     """Print the solution path"""
     if not path:
         print("No solution found!")
@@ -175,7 +336,7 @@ def print_solution(path, jug1_capacity, jug2_capacity, target):
         print(f"  {state}")
         
         # Highlight if target is achieved
-        if state.is_goal(target):
+        if state.is_goal(target, target_jug):
             if state.jug1_amount == target:
                 print(f"  *** TARGET {target} ACHIEVED in Jug 1 ***")
             if state.jug2_amount == target:
@@ -183,7 +344,7 @@ def print_solution(path, jug1_capacity, jug2_capacity, target):
         
         print("-" * 30)
 
-def solve_water_jug_problem(jug1_capacity, jug2_capacity, target, max_depth=50):
+def solve_water_jug_problem(jug1_capacity, jug2_capacity, target, target_jug=None, max_depth=50):
     """
     Main function to solve the water jug problem
     """
@@ -197,42 +358,58 @@ def solve_water_jug_problem(jug1_capacity, jug2_capacity, target, max_depth=50):
     if not is_solvable(jug1_capacity, jug2_capacity, target):
         print("This problem is not solvable!")
         print(f"Target {target} is not achievable with jugs of capacity {jug1_capacity} and {jug2_capacity}")
-        return
+        return None, 0, {}
     
     # Solve using DFS
-    solution, nodes_explored = dfs_solve(jug1_capacity, jug2_capacity, target, max_depth)
+    solution, nodes_explored, all_states_tree = dfs_solve(jug1_capacity, jug2_capacity, target, target_jug, max_depth)
     
     print(f"Nodes explored: {nodes_explored}")
     
     if solution:
-        print_solution(solution, jug1_capacity, jug2_capacity, target)
+        print_solution(solution, jug1_capacity, jug2_capacity, target, target_jug)
     else:
         print(f"No solution found within depth limit of {max_depth}")
+    
+    return solution, nodes_explored, all_states_tree
 
-# Example usage and test cases
+# Main execution
 if __name__ == "__main__":
-    # Classic water jug problems
-    test_cases = [
-        # (jug1_capacity, jug2_capacity, target, description)
-        (4, 3, 2, "Classic 4L-3L jug problem to get 2L"),
-        (5, 3, 4, "5L-3L jug problem to get 4L"),
-        (8, 5, 3, "8L-5L jug problem to get 3L"),
-        (7, 4, 5, "7L-4L jug problem to get 5L"),
-        (6, 4, 2, "6L-4L jug problem to get 2L"),
-        (10, 6, 8, "10L-6L jug problem to get 8L"),
-        (9, 4, 6, "9L-4L jug problem to get 6L"),
-        (12, 8, 4, "12L-8L jug problem to get 4L")
-    ]
+    # Get user input
+    jug1_cap, jug2_cap, target, target_jug = get_user_input()
     
-    for jug1_cap, jug2_cap, target, description in test_cases:
-        print(f"\n{'='*60}")
-        print(f"Test Case: {description}")
-        print(f"{'='*60}")
-        
-        solve_water_jug_problem(jug1_cap, jug2_cap, target)
+    # Display target jug preference
+    if target_jug == 1:
+        target_jug_desc = "Jug 1"
+    elif target_jug == 2:
+        target_jug_desc = "Jug 2"
+    else:
+        target_jug_desc = "Either jug"
     
-    # Example of unsolvable problem
-    print(f"\n{'='*60}")
-    print("Example of Unsolvable Problem:")
-    print(f"{'='*60}")
-    solve_water_jug_problem(4, 6, 5)  # This should be unsolvable
+    print(f"\nInitial State: Jug1: 0, Jug2: 0")
+    print(f"Target: {target} units in {target_jug_desc}")
+    print()
+    
+    # Solve the problem
+    solution, nodes_explored, all_states_tree = solve_water_jug_problem(jug1_cap, jug2_cap, target, target_jug)
+    
+    # Generate tree output
+    tree_output = format_tree_output(all_states_tree, solution, jug1_cap, jug2_cap, target, target_jug)
+    
+    # Save to file
+    with open("outputs/2-output.txt", "w") as f:
+        f.write(tree_output)
+    
+    # Display results
+    print(f"\nNodes explored: {nodes_explored}")
+    print(f"Total states in tree: {len(all_states_tree)}")
+    
+    if solution:
+        print(f"Solution found in {len(solution) - 1} steps!")
+    else:
+        print("No solution found!")
+    
+    print("\n" + "="*50)
+    print("TREE OUTPUT:")
+    print("="*50)
+    print(tree_output)
+    print(f"\nTree output has been saved to 'outputs/2-output.txt'")

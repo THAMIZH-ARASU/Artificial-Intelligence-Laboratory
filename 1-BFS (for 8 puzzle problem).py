@@ -354,7 +354,7 @@ if __name__ == "__main__":
     tree_output = format_tree_output(all_states_tree, solution)
     
     # Save to file
-    with open("1-output.txt", "w") as f:
+    with open("outputs/1-output.txt", "w") as f:
         f.write(tree_output)
     
     # Display results
@@ -371,4 +371,4 @@ if __name__ == "__main__":
     print("TREE OUTPUT:")
     print("="*50)
     print(tree_output)
-    print(f"\nTree output has been saved to '1-output.txt'")
+    print(f"\nTree output has been saved to 'outputs/1-output.txt'")
